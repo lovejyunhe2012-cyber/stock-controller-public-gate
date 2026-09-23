@@ -1,0 +1,23 @@
+name: Issue Request Controller
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  issue-request-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Process latest sanitized execution request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python public_minimal/issue_request_runner.py
+      - name: Show result
+        if: always()
+        run: cat public_minimal/issue_request_result.json || true
