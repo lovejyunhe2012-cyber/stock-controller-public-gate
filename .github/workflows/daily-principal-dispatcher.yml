@@ -1,6 +1,11 @@
 name: Daily Principal Dispatcher Prototype
 
 on:
+  push:
+    branches:
+      - research-daily-principal-dispatcher-20260923
+    paths:
+      - '.github/workflows/daily-principal-dispatcher.yml'
   workflow_dispatch:
 
 permissions:
