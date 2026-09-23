@@ -33,6 +33,21 @@ jobs:
           code="$(cat /tmp/write_code)"
           echo "contents_write_http=${code}"
           test "${code}" = "403"
+      - name: Verify administration is denied
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl -sS -o /tmp/admin.json -w "%{http_code}" \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}" \
+            -d '{}' | tee /tmp/admin_code
+          code="$(cat /tmp/admin_code)"
+          echo "administration_http=${code}"
+          test "${code}" = "403"
       - name: Dispatch protected main probe
         env:
           GH_TOKEN: ${{ github.token }}
