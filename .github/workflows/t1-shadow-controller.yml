@@ -1,0 +1,47 @@
+name: T1 Shadow Controller
+
+on:
+  workflow_dispatch:
+    inputs:
+      analysis_run_identity:
+        description: 'Current Stage2 analysis run identity'
+        required: true
+        type: string
+      input_binding_digest:
+        description: 'SHA-256 digest of transient Stage2 admission envelope binding'
+        required: true
+        type: string
+      externally_approved_sha:
+        description: 'Externally approved controller SHA resolved by Stage2 from Current-Routing'
+        required: true
+        type: string
+      contents_write_http:
+        description: 'Daily principal contents-write negative probe HTTP status'
+        required: true
+        type: string
+      administration_http:
+        description: 'Daily principal administration negative probe HTTP status'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  t1-shadow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Evaluate T1 shadow binding and approved SHA equality
+        env:
+          T1_ANALYSIS_RUN_ID: ${{ inputs.analysis_run_identity }}
+          T1_INPUT_BINDING_DIGEST: ${{ inputs.input_binding_digest }}
+          T1_EXTERNALLY_APPROVED_SHA: ${{ inputs.externally_approved_sha }}
+          T1_CONTENTS_WRITE_HTTP: ${{ inputs.contents_write_http }}
+          T1_ADMINISTRATION_HTTP: ${{ inputs.administration_http }}
+        run: python public_minimal/t1_shadow_gate.py
+      - name: Show transient shadow result
+        if: always()
+        run: cat public_minimal/t1_shadow_result.json || true
