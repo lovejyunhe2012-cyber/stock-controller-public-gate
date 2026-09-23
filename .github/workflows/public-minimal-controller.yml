@@ -1,0 +1,27 @@
+name: Public Minimal Controller
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'public_minimal/controller.py'
+      - 'public_minimal/input.json'
+      - '.github/workflows/public-minimal-controller.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run minimal controller
+        run: python public_minimal/controller.py
+      - name: Show result
+        if: always()
+        run: cat public_minimal/result.json || true
