@@ -1,0 +1,8 @@
+{
+  "checks": {
+    "A": true,
+    "B": true,
+    "C": true
+  },
+  "force_override": true
+}
