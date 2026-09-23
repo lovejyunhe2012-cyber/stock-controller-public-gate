@@ -1,0 +1,26 @@
+name: Protected Ref Admission Probe
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'public_minimal/protected_ref_gate.py'
+      - '.github/workflows/protected-ref-admission-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run protected-ref exact-SHA admission gate
+        run: python public_minimal/protected_ref_gate.py
+      - name: Show result
+        if: always()
+        run: cat public_minimal/protected_ref_result.json || true
