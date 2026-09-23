@@ -16,6 +16,23 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
+      - name: Verify contents write is denied
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          payload='{"message":"daily principal contents write negative probe","content":"cHJvYmU=","branch":"'"${BRANCH}"'"}'
+          curl -sS -o /tmp/write.json -w "%{http_code}" \
+            -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/contents/daily-principal-write-probe.txt" \
+            -d "${payload}" | tee /tmp/write_code
+          code="$(cat /tmp/write_code)"
+          echo "contents_write_http=${code}"
+          test "${code}" = "403"
       - name: Dispatch protected main probe
         env:
           GH_TOKEN: ${{ github.token }}
@@ -27,7 +44,7 @@ jobs:
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${REPO}/actions/workflows/protected-ref-admission-probe.yml/dispatches" \
-            -d '{"ref":"main"}' | tee /tmp/http_code
-          code="$(cat /tmp/http_code)"
+            -d '{"ref":"main"}' | tee /tmp/dispatch_code
+          code="$(cat /tmp/dispatch_code)"
           echo "dispatch_http=${code}"
           test "${code}" = "204"
