@@ -10,21 +10,21 @@ on:
     inputs:
       analysis_run_identity:
         description: 'Current Stage2 analysis run identity'
-        required: false
+        required: true
         type: string
       input_binding_digest:
         description: 'SHA-256 digest of transient Stage2 admission envelope binding'
-        required: false
+        required: true
         type: string
       externally_approved_sha:
         description: 'Externally approved controller SHA resolved by Stage2 from Current-Routing'
-        required: false
+        required: true
         type: string
       t1_shadow_enabled:
-        description: 'Dispatch T1 shadow controller only when explicitly bound by Stage2'
-        required: false
-        default: 'false'
-        type: string
+        description: 'Dispatch T1 shadow controller for the current Stage2-bound run'
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   actions: write
@@ -51,6 +51,7 @@ jobs:
           code="$(cat /tmp/write_code)"
           echo "contents_write_http=${code}"
           test "${code}" = "403"
+
       - name: Verify administration is denied
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,8 +67,9 @@ jobs:
           code="$(cat /tmp/admin_code)"
           echo "administration_http=${code}"
           test "${code}" = "403"
+
       - name: Dispatch protected main probe
-        if: ${{ inputs.t1_shadow_enabled != 'true' }}
+        if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -82,8 +84,16 @@ jobs:
           code="$(cat /tmp/dispatch_code)"
           echo "dispatch_http=${code}"
           test "${code}" = "204"
+
+      - name: Require T1 shadow mode for manual dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          T1_SHADOW_ENABLED: ${{ inputs.t1_shadow_enabled }}
+        run: |
+          test "${T1_SHADOW_ENABLED}" = "true"
+
       - name: Validate T1 shadow binding inputs
-        if: ${{ inputs.t1_shadow_enabled == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           RUN_ID: ${{ inputs.analysis_run_identity }}
           BINDING_DIGEST: ${{ inputs.input_binding_digest }}
@@ -92,8 +102,9 @@ jobs:
           test -n "${RUN_ID}"
           echo "${BINDING_DIGEST}" | grep -Eq '^[0-9a-fA-F]{64}$'
           echo "${APPROVED_SHA}" | grep -Eq '^[0-9a-fA-F]{40}$'
+
       - name: Dispatch T1 shadow controller
-        if: ${{ inputs.t1_shadow_enabled == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -101,8 +112,6 @@ jobs:
           BINDING_DIGEST: ${{ inputs.input_binding_digest }}
           APPROVED_SHA: ${{ inputs.externally_approved_sha }}
         run: |
-          write_code="$(cat /tmp/write_code)"
-          admin_code="$(cat /tmp/admin_code)"
           python - <<'PY' > /tmp/t1_dispatch_payload.json
           import json, os
           print(json.dumps({
