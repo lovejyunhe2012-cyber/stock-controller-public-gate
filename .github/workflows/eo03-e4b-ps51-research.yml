@@ -1,0 +1,41 @@
+name: EO03 E4B Windows PS51 isolated diagnostics
+on:
+  push:
+    branches:
+      - research/eo03-e4b-ps51-20261013
+    paths:
+      - 'research/eo03/e4b/**'
+      - '.github/workflows/eo03-e4b-ps51-research.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ps51-readonly:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify E4B diagnostic script parses without execution of fixtures
+        shell: powershell
+        run: |
+          $path = Join-Path $PWD 'research/eo03/e4b/E4B_ReadOnly_Diagnostics.ps1'
+          $tokens = $null
+          $errors = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) { $errors | ForEach-Object { Write-Error $_.Message }; throw 'E4B_DIAGNOSTIC_PARSE_FAILED' }
+          if ($PSVersionTable.PSVersion.ToString() -notlike '5.1*') { throw 'NOT_WINDOWS_PS51' }
+          Write-Output 'E4B_DIAGNOSTIC_PARSE_PASS_PS51'
+      - name: Run research diagnostic only (no ZIP supplied, no child fixture execution)
+        shell: powershell
+        run: |
+          $file = Join-Path $PWD 'research/eo03/e4b/E4B_ReadOnly_Diagnostics.ps1'
+          $raw = & $file
+          $report = $raw | ConvertFrom-Json
+          if ($report.role -ne 'EO03_E4B_READ_ONLY_DIAGNOSTICS_ONLY') { throw 'WRONG_DIAGNOSTIC_ROLE' }
+          if ($report.execution_authorized -ne $false -or $report.release_approved -ne $false) { throw 'UNEXPECTED_RELEASE_AUTHORITY' }
+          $bad = @($report.findings | Where-Object { $_.status -eq 'BLOCK_FOR_E4B_RUNTIME' -or $_.status -eq 'UNKNOWN' })
+          if ($bad.Count -gt 0) { $bad | ConvertTo-Json -Depth 6 | Write-Output; throw 'E4B_HOST_DIAGNOSTIC_UNEXPECTED' }
+          $report | ConvertTo-Json -Depth 8 | Write-Output
+          Write-Output 'E4B_HOST_OBSERVATION_ONLY_PASS'
