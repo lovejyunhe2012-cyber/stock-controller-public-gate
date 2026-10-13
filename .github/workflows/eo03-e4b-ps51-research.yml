@@ -191,7 +191,7 @@ jobs:
             $n = Convert-ResearchExpectedRows $case.value
             if($n -ne $case.expect){throw ('E3R13_VALID_VALUE_REJECTED:'+ $case.value)}
           }
-          foreach($bad in @('120+1','-1','0','10001','2147483648','1.5','NaN','1;Write-Output',' 120 ','１２0')) {
+          foreach($bad in @('120+1','-1','0','10001','2147483648','1.5','NaN','1;Write-Output',' 120 ','0x10')) {
             $blocked = $false
             try {
               $null = Convert-ResearchExpectedRows $bad
