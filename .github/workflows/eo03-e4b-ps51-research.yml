@@ -108,3 +108,17 @@ jobs:
           )
           foreach ($marker in $required) { if ($marker -notin $lines) { throw ('E3R3_MOCK_MARKER_MISSING:' + $marker) } }
           $lines | Write-Output
+
+      - name: E3R11 synthetic Technical child byte and input gate (no child execution)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $file = Join-Path $PWD 'research/eo03/e4b/E3R11_SyntheticChild_Gate_PS51.ps1'
+          $tokens=$null; $errors=$null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile($file,[ref]$tokens,[ref]$errors)
+          if (@($errors).Count -gt 0) { throw 'E3R11_TEST_SCRIPT_PARSER_FAIL' }
+          if ($PSVersionTable.PSVersion.ToString() -notlike '5.1*') { throw 'E3R11_HOST_NOT_PS51' }
+          $lines=@(& $file)
+          $must=@('E3R11_VALID_CHILD_EXACT_BYTES_PASS','E3R11_TYPED_INPUT_NEGATIVES_PASS','E3R11_PATH_AND_INPUT_NEGATIVES_PASS','E3R11_TAMPERED_VALID_SYNTAX_CHILD_BLOCK_PASS','E3R11_PARSER_PASS_IS_NOT_APPROVAL_PASS','E3R11_NO_CHILD_EXECUTION_RELEASE_APPROVED_FALSE')
+          foreach($name in $must){if($name -notin $lines){throw ('E3R11_MARKER_MISSING_'+$name)}}
+          $lines | Write-Output
