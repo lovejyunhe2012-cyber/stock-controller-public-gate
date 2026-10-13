@@ -122,3 +122,30 @@ jobs:
           $must=@('E3R11_VALID_CHILD_EXACT_BYTES_PASS','E3R11_TYPED_INPUT_NEGATIVES_PASS','E3R11_PATH_AND_INPUT_NEGATIVES_PASS','E3R11_TAMPERED_VALID_SYNTAX_CHILD_BLOCK_PASS','E3R11_PARSER_PASS_IS_NOT_APPROVAL_PASS','E3R11_NO_CHILD_EXECUTION_RELEASE_APPROVED_FALSE')
           foreach($name in $must){if($name -notin $lines){throw ('E3R11_MARKER_MISSING_'+$name)}}
           $lines | Write-Output
+
+      - name: E3R12 real-generator syntax boundary (isolated .NET semantics only)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          if ($PSVersionTable.PSVersion.ToString() -notlike '5.1*') { throw 'E3R12_NOT_WINDOWS_PS51' }
+          # 1 in [regex]::Replace(input, pattern, replacement, 1) binds RegexOptions.IgnoreCase.
+          $probe = [regex]::Replace('key KEY key', 'key', 'X', 1)
+          if ($probe -cne 'X X X') { throw ('E3R12_REGEX_OPTION_BINDING_UNEXPECTED:' + $probe) }
+          Write-Output 'E3R12_REGEX_FOURTH_ARGUMENT_IS_IGNORECASE_NOT_COUNT_PASS'
+          # Input-supplied $& has replacement-template meaning in Regex.Replace(string replacement).
+          $inputRole = '$&'
+          $replacement = "role='$inputRole'"
+          $changed = [regex]::Replace('Name=old', 'Name=old', $replacement, 1)
+          if ($changed -cne "role='Name=old'") { throw ('E3R12_REPLACEMENT_META_UNEXPECTED:' + $changed) }
+          Write-Output 'E3R12_REGEX_REPLACEMENT_META_EXPANSION_REPRODUCED'
+          # Representative literal construction from current generator, without loading business source.
+          $expectedMinRows = '120+1'
+          $rawChild = '[pscustomobject]@{ expected_min_rows=' + $expectedMinRows + ' }'
+          if (-not $rawChild.Contains('expected_min_rows=120+1')) { throw 'E3R12_RAW_NUMERIC_INTERPOLATION_MISSING' }
+          $tok = $null; $errs = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseInput($rawChild, [ref]$tok, [ref]$errs)
+          if (@($errs).Count -gt 0) { throw ('E3R12_EXPRESSION_PARSE_UNEXPECTED:' + (@($errs) | ForEach-Object {$_.Message} | Out-String)) }
+          if ($expectedMinRows -match '^[0-9]+$') { throw 'E3R12_TYPED_BOUNDARY_MISSING' }
+          Write-Output 'E3R12_PARSER_ACCEPTS_UNTYPED_NUMERIC_EXPRESSION_PASS'
+          Write-Output 'E3R12_LIVE_RPKG6_SOURCE_NOT_EXECUTED_FINAL_ZIP_NOT_TESTED_RELEASE_APPROVED_FALSE'
