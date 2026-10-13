@@ -39,3 +39,51 @@ jobs:
           if ($bad.Count -gt 0) { $bad | ConvertTo-Json -Depth 6 | Write-Output; throw 'E4B_HOST_DIAGNOSTIC_UNEXPECTED' }
           $report | ConvertTo-Json -Depth 8 | Write-Output
           Write-Output 'E4B_HOST_OBSERVATION_ONLY_PASS'
+
+      - name: Exercise synthetic ZIP metadata allow and deny on Windows PS51 (no extraction)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName 'System.IO.Compression'
+          $diagnostic = Join-Path $PWD 'research/eo03/e4b/E4B_ReadOnly_Diagnostics.ps1'
+          $tmp = Join-Path $env:RUNNER_TEMP ('EO03_E4B_' + $env:GITHUB_RUN_ID)
+          if (Test-Path -LiteralPath $tmp) { throw 'RESEARCH_TEMP_COLLISION' }
+          [System.IO.Directory]::CreateDirectory($tmp) | Out-Null
+          function New-ResearchZip {
+            param([string]$Path, [string[]]$Names)
+            $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+            try {
+              $archive = [System.IO.Compression.ZipArchive]::new($fs, [System.IO.Compression.ZipArchiveMode]::Create, $true)
+              try {
+                foreach ($name in $Names) {
+                  $entry = $archive.CreateEntry($name)
+                  $writer = [System.IO.StreamWriter]::new($entry.Open(), [System.Text.Encoding]::ASCII)
+                  try { $writer.Write('SYNTHETIC_EO03_NO_EXECUTION') } finally { $writer.Dispose() }
+                }
+              } finally { $archive.Dispose() }
+            } finally { $fs.Dispose() }
+          }
+          function Assert-ResearchZip {
+            param([string]$Name, [string]$Expected)
+            $file = Join-Path $tmp $Name
+            $report = (& $diagnostic -ZipPath $file | ConvertFrom-Json)
+            if ($report.release_approved -ne $false -or $report.execution_authorized -ne $false) { throw 'UNAUTHORIZED_RESEARCH_RELEASE' }
+            $finding = @($report.findings | Where-Object { $_.code -eq 'D07_ZIP_METADATA' })
+            if ($finding.Count -ne 1 -or $finding[0].status -ne $Expected) {
+              throw ('ZIP_METADATA_MISMATCH: ' + $Name + ' expected=' + $Expected + ' actual=' + (@($finding | ForEach-Object { $_.status }) -join ','))
+            }
+            Write-Output ('EO03_E4B_ZIP_CASE_PASS ' + $Name + ' status=' + $Expected)
+          }
+          try {
+            New-ResearchZip (Join-Path $tmp 'valid.zip') @('valid_ascii.ps1')
+            New-ResearchZip (Join-Path $tmp 'traversal.zip') @('../escape.ps1')
+            New-ResearchZip (Join-Path $tmp 'duplicate.zip') @('file.ps1', 'FILE.ps1')
+            [System.IO.File]::WriteAllText((Join-Path $tmp 'invalid.zip'), 'not a zip', [System.Text.Encoding]::ASCII)
+            Assert-ResearchZip 'valid.zip' 'OBSERVED_METADATA_ONLY'
+            Assert-ResearchZip 'traversal.zip' 'BLOCK_FOR_E4B_RUNTIME'
+            Assert-ResearchZip 'duplicate.zip' 'BLOCK_FOR_E4B_RUNTIME'
+            Assert-ResearchZip 'invalid.zip' 'UNKNOWN'
+            Write-Output 'E4B_WINDOWS_PS51_ZIP_METADATA_4_OF_4_PASS_NO_EXTRACTION'
+          } finally {
+            if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+          }
