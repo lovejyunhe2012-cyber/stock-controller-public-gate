@@ -184,7 +184,7 @@ jobs:
           }
           foreach($case in @(
             [pscustomobject]@{value='120';expect=120},
-            [pscustomobject]@{value='000120';expect=120},
+            [pscustomobject]@{value='00120';expect=120},
             [pscustomobject]@{value='10000';expect=10000},
             [pscustomobject]@{value='';expect=120}
           )) {
