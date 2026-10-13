@@ -149,3 +149,57 @@ jobs:
           if ($expectedMinRows -match '^[0-9]+$') { throw 'E3R12_TYPED_BOUNDARY_MISSING' }
           Write-Output 'E3R12_PARSER_ACCEPTS_UNTYPED_NUMERIC_EXPRESSION_PASS'
           Write-Output 'E3R12_LIVE_RPKG6_SOURCE_NOT_EXECUTED_FINAL_ZIP_NOT_TESTED_RELEASE_APPROVED_FALSE'
+
+      - name: E3R13 regex count and typed numeric boundary (synthetic only)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          if ($PSVersionTable.PSVersion.ToString() -notlike '5.1*') { throw 'E3R13_HOST_NOT_PS51' }
+          # TEST 1: .NET Regex match-count guard on public-safe synthetic strings only.
+          $p = '(?m)^marker$'
+          $options = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+          $cases = @(
+            [pscustomobject]@{v='marker';n=1},
+            [pscustomobject]@{v='';n=0},
+            [pscustomobject]@{v="marker`nMARKER";n=2}
+          )
+          foreach ($c in $cases) {
+            $count = [regex]::Matches([string]$c.v,$p,$options).Count
+            if ($count -ne [int]$c.n) { throw ('E3R13_REGEX_COUNT_UNEXPECTED:'+$count+' expected='+$c.n) }
+            $permit = ($count -eq 1)
+            if ($permit -ne ($c.n -eq 1)) { throw 'E3R13_REGEX_FAIL_CLOSED_UNEXPECTED' }
+          }
+          Write-Output 'E3R13_T1_PS51_REGEX_COUNT_0_1_2_FAIL_CLOSED_PASS_SYNTHETIC'
+          # TEST 2: typed value boundary research candidate; 10000 is NOT Stage2 policy.
+          function Convert-ResearchExpectedRows {
+            param([AllowEmptyString()][string]$Value)
+            if ([string]::IsNullOrWhiteSpace($Value)) { return 120 }
+            if ($Value -cnotmatch '^[0-9]{1,5}$') { throw 'E3R13_TYPE_BLOCK_FORMAT' }
+            [int]$n = 0
+            if (-not [int]::TryParse($Value,[ref]$n) -or $n -lt 1 -or $n -gt 10000) {
+              throw 'E3R13_TYPE_BLOCK_RANGE'
+            }
+            return $n
+          }
+          foreach($case in @(
+            [pscustomobject]@{value='120';expect=120},
+            [pscustomobject]@{value='000120';expect=120},
+            [pscustomobject]@{value='10000';expect=10000},
+            [pscustomobject]@{value='';expect=120}
+          )) {
+            $n = Convert-ResearchExpectedRows $case.value
+            if($n -ne $case.expect){throw ('E3R13_VALID_VALUE_REJECTED:'+ $case.value)}
+          }
+          foreach($bad in @('120+1','-1','0','10001','2147483648','1.5','NaN','1;Write-Output',' 120 ','１２0')) {
+            $blocked = $false
+            try {
+              $null = Convert-ResearchExpectedRows $bad
+            } catch {
+              if ($_.Exception.Message -like 'E3R13_TYPE_BLOCK_*') { $blocked = $true }
+              else { throw }
+            }
+            if (-not $blocked) { throw ('E3R13_BAD_VALUE_ACCEPTED:'+ $bad) }
+          }
+          Write-Output 'E3R13_T2_PS51_TYPED_BOUNDARY_POSITIVE_NEGATIVE_PASS_RESEARCH_RANGE_ONLY'
+          Write-Output 'E3R13_REAL_PARENT_BASE_NOT_UPLOADED_NO_CHILD_EXECUTION_NO_RELEASE'
